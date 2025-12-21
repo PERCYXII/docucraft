@@ -1,6 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { FileText, PlusCircle, Printer, Layout, Briefcase, Settings, ChevronRight, Loader2, Save, Trash2, DatabaseZap, AlertCircle, Edit3, Eye, Sparkles, Send, CheckCircle2, Upload, X, FileUp, Image as ImageIcon } from 'lucide-react';
+import { 
+  FileText, PlusCircle, Printer, Layout, Briefcase, Settings, 
+  ChevronRight, Loader2, Save, Trash2, DatabaseZap, AlertCircle, 
+  Edit3, Eye, Sparkles, Send, CheckCircle2, Upload, X, FileUp, 
+  Image as ImageIcon, History as HistoryIcon, LogOut 
+} from 'lucide-react';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js';
@@ -8,7 +13,7 @@ import { DocType, DocumentData, ProjectInputs, Attachment } from './types';
 import { generateDocument, refineDocument } from './services/geminiService';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 import Letterhead from './components/Letterhead';
-import MermaidDiagram from './components/MermaidDiagram';
+import MermaidDiagram from './MermaidDiagram';
 
 // Configure marked with syntax highlighting
 marked.use(markedHighlight({
@@ -19,6 +24,7 @@ marked.use(markedHighlight({
   }
 }));
 
+// Fix: Corrected App definition to return a JSX element and added default export to resolve index.tsx import error.
 const App: React.FC = () => {
   const [inputs, setInputs] = useState<ProjectInputs>({
     type: DocType.PLAYBOOK,
@@ -170,20 +176,17 @@ const App: React.FC = () => {
         }
         setIsSaving(false);
       }
-
       setCurrentDoc(newDocData);
-      setIsEditing(false);
-    } catch (error) {
-      console.error("Generation failed:", error);
-      alert("Failed to generate document. Please try again.");
+    } catch (err) {
+      console.error("Generation error:", err);
+      alert("Failed to generate document. Please check your API key and try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleRefine = async () => {
-    if (!currentDoc || !refinePrompt) return;
-
+    if (!currentDoc || !refinePrompt.trim()) return;
     setIsRefining(true);
     try {
       const result = await refineDocument(currentDoc.content, currentDoc.diagramCode || '', refinePrompt);
@@ -192,95 +195,39 @@ const App: React.FC = () => {
         content: result.content,
         diagramCode: result.diagramCode
       };
-      
-      if (supabase && !currentDoc.id.startsWith('temp')) {
-        const { error } = await supabase
+      setCurrentDoc(updatedDoc);
+      setRefinePrompt('');
+
+      if (supabase && updatedDoc.id && !updatedDoc.id.startsWith('temp-')) {
+        await supabase
           .from('documents')
           .update({
             content: updatedDoc.content,
-            diagram_code: updatedDoc.diagramCode,
-            updated_at: new Date().toISOString()
+            diagram_code: updatedDoc.diagramCode
           })
-          .eq('id', currentDoc.id);
-        
-        if (!error) {
-          setSaveSuccess(true);
-          setTimeout(() => setSaveSuccess(false), 3000);
-          fetchHistory();
-        }
+          .eq('id', updatedDoc.id);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
       }
-
-      setCurrentDoc(updatedDoc);
-      setRefinePrompt('');
-      setIsEditing(false);
-    } catch (error) {
-      console.error("Refinement failed:", error);
-      alert("Adjustment failed.");
+    } catch (err) {
+      console.error("Refinement error:", err);
     } finally {
       setIsRefining(false);
-    }
-  };
-
-  const handleManualSave = async () => {
-    if (!currentDoc || !supabase) return;
-    
-    setIsSaving(true);
-    try {
-      const payload = {
-        type: currentDoc.type,
-        project_name: currentDoc.projectName,
-        client_name: currentDoc.clientName,
-        author: currentDoc.author,
-        content: currentDoc.content,
-        diagram_code: currentDoc.diagramCode,
-        updated_at: new Date().toISOString()
-      };
-
-      let response;
-      if (currentDoc.id.startsWith('temp')) {
-        response = await supabase.from('documents').insert([payload]).select();
-      } else {
-        response = await supabase.from('documents').update(payload).eq('id', currentDoc.id).select();
-      }
-
-      if (response.error) throw response.error;
-      
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-      fetchHistory();
-      
-      if (response.data && response.data[0]) {
-        setCurrentDoc({
-          ...currentDoc,
-          id: response.data[0].id
-        });
-      }
-    } catch (err: any) {
-      console.error("Error saving:", err);
-      alert(`Save failed: ${err.message}`);
-    } finally {
-      setIsSaving(false);
     }
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!supabase) return;
-    if (!confirm("Are you sure you want to delete this document?")) return;
-
+    if (!window.confirm("Delete this document permanently?")) return;
+    
     try {
-      const { error } = await supabase
-        .from('documents')
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from('documents').delete().eq('id', id);
       if (error) throw error;
-      
       if (currentDoc?.id === id) setCurrentDoc(null);
       fetchHistory();
-    } catch (err: any) {
-      console.error("Delete failed:", err);
-      alert(`Delete failed: ${err.message}`);
+    } catch (err) {
+      console.error("Delete error:", err);
     }
   };
 
@@ -288,317 +235,272 @@ const App: React.FC = () => {
     window.print();
   };
 
-  const handleReset = () => {
-    setCurrentDoc(null);
-    setIsEditing(false);
-    setInputs({
-      type: DocType.PLAYBOOK,
-      projectName: '',
-      clientName: '',
-      author: '',
-      description: ''
-    });
-  };
-
-  // Fix: Ensure marked.parse returns a string synchronously for dangerouslySetInnerHTML
-  const renderMarkdown = (content: string) => {
-    // In marked v15, parse is the main entry point. Extensions are already applied globally.
-    // We cast the result to string to satisfy the dangerouslySetInnerHTML type requirement.
-    const html = marked.parse(content) as string;
-    return { __html: html };
-  };
-
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
-      <aside className="w-full md:w-80 bg-slate-900 text-slate-300 p-6 flex-shrink-0 flex flex-col no-print border-r border-slate-800">
-        <div className="flex items-center gap-3 mb-10">
-          <div className="bg-blue-600 p-2 rounded-lg">
-            <Layout className="w-6 h-6 text-white" />
+    <div className="min-h-screen bg-slate-50 flex text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900">
+      {/* Sidebar: History & Navigation */}
+      <aside className="w-80 bg-white border-r border-slate-200 flex flex-col h-screen sticky top-0 no-print">
+        <div className="p-6 border-b border-slate-100 flex items-center gap-3">
+          <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-200">
+            <DatabaseZap size={20} />
           </div>
-          <h1 className="text-xl font-bold text-white tracking-tight">DocuCraft <span className="text-blue-500 font-light">Pro</span></h1>
+          <div>
+            <h2 className="font-bold text-slate-800 tracking-tight">INFRASTRUX</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Doc Engine v2.0</p>
+          </div>
         </div>
 
-        <nav className="space-y-1 flex-grow overflow-y-auto custom-scrollbar">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Creation Hub</p>
+        <div className="p-4 flex flex-col gap-2 overflow-y-auto flex-1">
           <button 
-            onClick={handleReset}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${!currentDoc ? 'bg-slate-800 text-white shadow-lg' : 'hover:bg-slate-800/50'}`}
+            onClick={() => setCurrentDoc(null)}
+            className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group ${!currentDoc ? 'bg-blue-50 text-blue-700 shadow-sm' : 'hover:bg-slate-50 text-slate-500'}`}
           >
-            <PlusCircle className="w-5 h-5" />
-            <span className="font-medium">New Document</span>
+            <PlusCircle size={18} className={!currentDoc ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-500'} />
+            <span className="font-semibold text-sm">New Project</span>
           </button>
-          
-          <div className="mt-10">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Vaulted Documents</p>
-            {dbError ? (
-              <div className="px-4 py-4 bg-red-900/10 rounded-xl border border-red-900/30">
-                <p className="text-xs text-red-400 font-bold flex items-center gap-2 mb-2">
-                  <AlertCircle className="w-4 h-4" /> Connection Issue
-                </p>
-                <p className="text-[10px] text-red-300/80 leading-relaxed mb-3">
-                  {dbError}
-                </p>
-                <button 
-                  onClick={fetchHistory}
-                  className="w-full text-[10px] bg-red-900/40 text-red-200 py-2 rounded-lg hover:bg-red-900/60 transition-all font-bold"
-                >
-                  Refresh
-                </button>
-              </div>
-            ) : history.length === 0 ? (
-              <div className="px-4 py-8 text-center bg-slate-800/20 rounded-xl border border-dashed border-slate-700">
-                <p className="text-sm text-slate-600 italic">Vault is empty</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {history.map(doc => (
-                  <button 
-                    key={doc.id}
-                    onClick={() => {
-                      setCurrentDoc(doc);
-                      setIsEditing(false);
-                    }}
-                    className={`group w-full text-left flex items-center justify-between px-4 py-2.5 rounded-xl transition-all text-sm ${currentDoc?.id === doc.id ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20' : 'hover:bg-slate-800 text-slate-400'}`}
-                  >
-                    <span className="truncate flex-1 font-medium">{doc.projectName}</span>
-                    <div className="flex items-center">
-                       <Trash2 
-                          onClick={(e) => handleDelete(doc.id, e)}
-                          className="w-4 h-4 ml-2 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all transform hover:scale-110" 
-                        />
-                       <ChevronRight className="w-4 h-4 opacity-50 ml-1" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </nav>
 
-        <div className="mt-auto pt-6 border-t border-slate-800">
-          <div className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-xl border border-slate-700/30">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${isSupabaseConfigured && !dbError ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-500'}`}>
-              <DatabaseZap className="w-5 h-5" />
+          <div className="mt-6">
+            <h3 className="px-3 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+              <HistoryIcon size={12} />
+              Recent Archives
+            </h3>
+            <div className="space-y-1">
+              {history.map(doc => (
+                <div 
+                  key={doc.id}
+                  onClick={() => setCurrentDoc(doc)}
+                  className={`group relative flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200 ${currentDoc?.id === doc.id ? 'bg-slate-100 text-slate-900 shadow-inner' : 'hover:bg-slate-50 text-slate-500'}`}
+                >
+                  <FileText size={16} className={currentDoc?.id === doc.id ? 'text-blue-600' : 'text-slate-300'} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold truncate">{doc.projectName}</p>
+                    <p className="text-[10px] opacity-60 truncate">{doc.type}</p>
+                  </div>
+                  <button 
+                    onClick={(e) => handleDelete(doc.id, e)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              {history.length === 0 && !dbError && (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">No history found</p>
+                </div>
+              )}
+              {dbError && (
+                <div className="p-4 text-center bg-red-50 rounded-xl border border-red-100">
+                  <AlertCircle size={16} className="text-red-500 mx-auto mb-2" />
+                  <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">{dbError}</p>
+                </div>
+              )}
             </div>
-            <div className="overflow-hidden">
-              <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Database</p>
-              <p className="text-xs font-medium text-white truncate">
-                {isSupabaseConfigured ? (dbError ? 'Offline' : 'Supabase Active') : 'Unconfigured'}
-              </p>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-100">
+          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl">
+            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs">JS</div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-xs font-bold truncate">John Smith</p>
+              <p className="text-[10px] text-slate-400 truncate">Lead Architect</p>
             </div>
+            <LogOut size={14} className="text-slate-300 hover:text-red-500 cursor-pointer" />
           </div>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-4 md:p-10 relative bg-slate-50 custom-scrollbar">
-        <div className="max-w-4xl mx-auto">
-          {!currentDoc ? (
-            <section className="bg-white rounded-3xl border border-slate-200 shadow-2xl p-10 transition-all animate-in fade-in slide-in-from-bottom-8 duration-700 no-print">
-              <div className="mb-10">
-                <h2 className="text-3xl font-bold text-slate-900 mb-2 tracking-tight">Technical Document Generator</h2>
-                <p className="text-slate-500">Automate high-quality engineering documentation with AI precision.</p>
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto relative bg-white lg:bg-slate-50">
+        {!currentDoc ? (
+          <div className="max-w-4xl mx-auto px-6 py-12 lg:py-24 animate-in fade-in slide-in-from-bottom-4 duration-700 no-print">
+            <div className="bg-white rounded-[2.5rem] p-10 lg:p-16 shadow-2xl shadow-slate-200/50 border border-slate-100">
+              <div className="mb-12">
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-widest mb-4">
+                  <Sparkles size={12} /> New Generation
+                </span>
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-4">Draft New Documentation</h1>
+                <p className="text-slate-500 text-lg leading-relaxed">Fill out the project metadata to initiate the AI-driven architectural drafting process.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    <Settings className="w-3 h-3 text-blue-600" /> Template
-                  </label>
-                  <select 
-                    value={inputs.type}
-                    onChange={e => setInputs({...inputs, type: e.target.value as DocType})}
-                    className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-slate-50/50 transition-all font-medium appearance-none cursor-pointer"
-                  >
-                    {Object.values(DocType).map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    <Briefcase className="w-3 h-3 text-blue-600" /> Project Title
-                  </label>
-                  <input 
-                    type="text"
-                    value={inputs.projectName}
-                    onChange={e => setInputs({...inputs, projectName: e.target.value})}
-                    placeholder="Project Name"
-                    className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-slate-50/50 transition-all font-medium"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Client Organization</label>
-                  <input 
-                    type="text"
-                    value={inputs.clientName}
-                    onChange={e => setInputs({...inputs, clientName: e.target.value})}
-                    placeholder="Client Name"
-                    className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-slate-50/50 transition-all font-medium"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Author / Lead Engineer</label>
-                  <input 
-                    type="text"
-                    value={inputs.author}
-                    onChange={e => setInputs({...inputs, author: e.target.value})}
-                    placeholder="Author Name"
-                    className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-slate-50/50 transition-all font-medium"
-                  />
-                </div>
-
-                <div className="col-span-1 md:col-span-2 space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Scope & Requirements</label>
-                  <textarea 
-                    rows={4}
-                    value={inputs.description}
-                    onChange={e => setInputs({...inputs, description: e.target.value})}
-                    placeholder="Provide technical details, tools, and deliverables..."
-                    className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-slate-50/50 transition-all resize-none font-medium"
-                  ></textarea>
-                </div>
-
-                <div className="col-span-1 md:col-span-2 space-y-2">
-                   <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    <FileUp className="w-3 h-3 text-blue-600" /> Technical Attachments (Images/Docs)
-                  </label>
-                  
-                  {inputs.attachment ? (
-                    <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-100 rounded-2xl animate-in zoom-in duration-300">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-blue-600 p-2 rounded-lg">
-                          {inputs.attachment.mimeType.startsWith('image/') ? <ImageIcon className="w-5 h-5 text-white" /> : <FileText className="w-5 h-5 text-white" />}
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-slate-900 truncate max-w-[200px] md:max-w-md">{inputs.attachment.name}</p>
-                          <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">Ready for AI processing</p>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={removeAttachment}
-                        className="p-2 hover:bg-blue-100 rounded-full text-blue-600 transition-all"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">Document Framework</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.values(DocType).map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => setInputs({ ...inputs, type })}
+                          className={`p-3 rounded-xl border text-xs font-bold transition-all text-left ${inputs.type === type ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-400'}`}
+                        >
+                          {type}
+                        </button>
+                      ))}
                     </div>
-                  ) : (
-                    <div 
-                      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                      onDragLeave={() => setIsDragging(false)}
-                      onDrop={handleFileChange}
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">Project Identifier</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Project Helios Expansion"
+                      value={inputs.projectName}
+                      onChange={(e) => setInputs({ ...inputs, projectName: e.target.value })}
+                      className="w-full bg-slate-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 transition-all font-semibold"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">Client Entity</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Acme Corp Industries"
+                      value={inputs.clientName}
+                      onChange={(e) => setInputs({ ...inputs, clientName: e.target.value })}
+                      className="w-full bg-slate-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 transition-all font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">Author Credit</label>
+                    <input 
+                      type="text" 
+                      placeholder="Your Name"
+                      value={inputs.author}
+                      onChange={(e) => setInputs({ ...inputs, author: e.target.value })}
+                      className="w-full bg-slate-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 transition-all font-semibold"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">Technical Briefing</label>
+                    <textarea 
+                      placeholder="Describe the scope, constraints, and requirements..."
+                      value={inputs.description}
+                      onChange={(e) => setInputs({ ...inputs, description: e.target.value })}
+                      className="w-full bg-slate-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-blue-500 transition-all font-semibold h-[180px] resize-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Attachment Zone */}
+              <div 
+                className={`mb-10 p-8 rounded-[2rem] border-2 border-dashed transition-all duration-300 relative group ${isDragging ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 bg-slate-50/30 hover:border-blue-300'}`}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleFileChange}
+              >
+                {!inputs.attachment ? (
+                  <div className="flex flex-col items-center gap-4 text-center">
+                    <div className="w-14 h-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 group-hover:scale-110 transition-transform">
+                      <FileUp size={24} />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-700">Append Architectural References</p>
+                      <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest">JPG, PNG, PDF (Max 4MB)</p>
+                    </div>
+                    <button 
                       onClick={() => fileInputRef.current?.click()}
-                      className={`relative group cursor-pointer border-2 border-dashed rounded-3xl p-8 transition-all flex flex-col items-center justify-center gap-3 ${isDragging ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-blue-400 hover:bg-slate-50'}`}
+                      className="mt-2 text-[10px] font-black text-blue-600 bg-blue-50 px-4 py-2 rounded-lg hover:bg-blue-600 hover:text-white transition-all uppercase tracking-widest"
                     >
-                      <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleFileChange} 
-                        className="hidden" 
-                        accept="image/*,application/pdf,.doc,.docx"
-                      />
-                      <div className={`p-4 rounded-full transition-all ${isDragging ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>
-                        <Upload className="w-6 h-6" />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-sm font-bold text-slate-900">Upload Reference Material</p>
-                        <p className="text-xs text-slate-500 mt-1">Drag and drop or click to upload (Max 4MB)</p>
-                      </div>
+                      Browse Files
+                    </button>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef}
+                      onChange={handleFileChange} 
+                      className="hidden" 
+                      accept="image/*,application/pdf" 
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-6 p-2">
+                    <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-200">
+                      <ImageIcon size={28} />
                     </div>
-                  )}
-                </div>
+                    <div className="flex-1 overflow-hidden">
+                      <p className="font-bold text-slate-800 truncate">{inputs.attachment.name}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{inputs.attachment.mimeType}</p>
+                    </div>
+                    <button 
+                      onClick={removeAttachment}
+                      className="p-3 bg-white hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-all border border-slate-100 shadow-sm"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div className="mt-12 flex justify-end">
+              <button
+                onClick={handleGenerate}
+                disabled={isLoading}
+                className="w-full bg-slate-900 hover:bg-blue-600 disabled:bg-slate-300 text-white font-black py-5 rounded-2xl transition-all duration-300 shadow-xl shadow-slate-200 flex items-center justify-center gap-4 text-lg uppercase tracking-widest group"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="animate-spin" size={24} />
+                    Synthesizing Architecture...
+                  </>
+                ) : (
+                  <>
+                    Initialize Engine
+                    <ChevronRight size={24} className="group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="animate-in fade-in zoom-in-95 duration-500">
+            {/* Toolbar */}
+            <div className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 flex items-center justify-between sticky top-0 z-10 no-print">
+              <div className="flex items-center gap-4">
                 <button 
-                  onClick={handleGenerate}
-                  disabled={isLoading}
-                  className="bg-slate-900 hover:bg-blue-600 text-white font-bold py-5 px-12 rounded-2xl flex items-center gap-3 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl shadow-blue-500/20 group"
+                  onClick={() => setCurrentDoc(null)}
+                  className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-all"
                 >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="w-6 h-6" />
-                      Generate & Save
-                    </>
-                  )}
+                  <ChevronRight size={20} className="rotate-180" />
+                </button>
+                <div>
+                  <h2 className="font-black text-slate-900 uppercase tracking-tighter text-sm">{currentDoc.projectName}</h2>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">{currentDoc.type}</span>
+                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{currentDoc.date}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {saveSuccess && (
+                  <span className="flex items-center gap-2 text-emerald-600 text-[10px] font-black uppercase tracking-widest bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100 animate-in fade-out fill-mode-forwards delay-2000">
+                    <CheckCircle2 size={12} /> Sync Complete
+                  </span>
+                )}
+                <button 
+                  onClick={() => setIsEditing(!isEditing)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${isEditing ? 'bg-slate-900 text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-400'}`}
+                >
+                  {isEditing ? <Eye size={16} /> : <Edit3 size={16} />}
+                  {isEditing ? 'Preview Mode' : 'Direct Edit'}
+                </button>
+                <button 
+                  onClick={handlePrint}
+                  className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:border-slate-400 rounded-xl transition-all shadow-sm"
+                  title="Print Document"
+                >
+                  <Printer size={18} />
                 </button>
               </div>
-            </section>
-          ) : (
-            <div className="animate-in fade-in slide-in-from-top-4 duration-700">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 no-print sticky top-0 z-40 bg-slate-50/80 backdrop-blur-md py-4">
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={handleReset}
-                    className="bg-white hover:bg-slate-100 text-slate-600 px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm transition-all flex items-center gap-2 font-bold text-sm"
-                  >
-                    <PlusCircle className="w-4 h-4" /> New
-                  </button>
-                  <button 
-                    onClick={() => setIsEditing(!isEditing)}
-                    className={`text-sm font-bold flex items-center gap-2 px-4 py-2.5 rounded-xl border shadow-sm transition-all ${isEditing ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400'}`}
-                  >
-                    {isEditing ? <><Eye className="w-4 h-4" /> Preview</> : <><Edit3 className="w-4 h-4" /> Edit</>}
-                  </button>
-                  {saveSuccess && (
-                    <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold bg-emerald-50 px-3 py-2 rounded-full border border-emerald-100">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Synced to DB
-                    </span>
-                  )}
-                </div>
-                <div className="flex gap-3">
-                  {isEditing && (
-                    <button 
-                      onClick={handleManualSave}
-                      disabled={isSaving}
-                      className="bg-white hover:bg-slate-50 text-slate-900 px-5 py-2.5 rounded-xl border border-slate-200 flex items-center gap-2 text-sm font-bold transition-all shadow-sm disabled:opacity-50"
-                    >
-                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      Update Database
-                    </button>
-                  )}
-                  <button 
-                    onClick={handlePrint}
-                    className="bg-slate-900 hover:bg-blue-600 text-white px-8 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-all shadow-xl"
-                  >
-                    <Printer className="w-4 h-4" /> Print / PDF
-                  </button>
-                </div>
-              </div>
+            </div>
 
-              <div className="mb-10 bg-slate-900 rounded-2xl p-5 shadow-2xl border border-slate-800 no-print">
-                <div className="flex items-center gap-3 mb-3">
-                  <Sparkles className="w-4 h-4 text-blue-400" />
-                  <span className="text-xs font-bold text-slate-200 uppercase tracking-widest">Refinement Assistant</span>
-                </div>
-                <div className="flex gap-3">
-                  <input 
-                    type="text" 
-                    value={refinePrompt}
-                    onChange={(e) => setRefinePrompt(e.target.value)}
-                    placeholder="e.g. Integrate Docker setup instructions..."
-                    className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-5 py-3 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600 font-medium"
-                    onKeyDown={(e) => e.key === 'Enter' && handleRefine()}
-                  />
-                  <button 
-                    onClick={handleRefine}
-                    disabled={isRefining || !refinePrompt}
-                    className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl flex items-center gap-2 text-sm font-bold transition-all disabled:opacity-50 shadow-lg shadow-blue-600/20"
-                  >
-                    {isRefining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    Apply
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-white p-[1.5cm] md:p-[2.5cm] min-h-[29.7cm] shadow-2xl border border-slate-200 rounded-xl letterhead-page mb-24 relative">
+            {/* Document Surface */}
+            <div className="max-w-[850px] mx-auto my-12 print:my-0 print:max-w-full">
+              <div className="bg-white shadow-2xl shadow-slate-200 p-12 lg:p-20 border border-slate-100 print:shadow-none print:border-none print:p-0 rounded-[3rem] print:rounded-none">
                 <Letterhead 
                   projectName={currentDoc.projectName}
                   clientName={currentDoc.clientName}
@@ -607,85 +509,61 @@ const App: React.FC = () => {
                   docType={currentDoc.type}
                 />
                 
-                <div className="mt-16 text-slate-800 leading-relaxed space-y-8">
-                  {isEditing ? (
-                    <div className="space-y-6 no-print">
-                       <div>
-                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Content (Markdown)</label>
-                         <textarea 
-                            className="w-full min-h-[600px] p-8 font-mono text-sm bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none shadow-inner"
-                            value={currentDoc.content}
-                            onChange={(e) => setCurrentDoc({...currentDoc, content: e.target.value})}
-                         />
-                       </div>
-                       
-                       <div>
-                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Workflow Logic (Mermaid)</label>
-                         <textarea 
-                            className="w-full min-h-[180px] p-6 font-mono text-xs bg-slate-900 text-emerald-400 border border-slate-800 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                            value={currentDoc.diagramCode || ''}
-                            onChange={(e) => setCurrentDoc({...currentDoc, diagramCode: e.target.value})}
-                         />
-                       </div>
-                    </div>
-                  ) : (
-                    <article className="animate-in fade-in duration-500">
-                      <div 
-                        className="prose prose-slate prose-base max-w-none prose-headings:font-serif prose-headings:text-slate-900 prose-headings:font-bold"
-                        dangerouslySetInnerHTML={renderMarkdown(currentDoc.content)}
+                {isEditing ? (
+                  <div className="space-y-8 no-print">
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Markdown Content</label>
+                      <textarea 
+                        value={currentDoc.content}
+                        onChange={(e) => setCurrentDoc({ ...currentDoc, content: e.target.value })}
+                        className="w-full min-h-[500px] p-8 bg-slate-50 rounded-[2rem] border-none font-mono text-sm leading-relaxed focus:ring-2 focus:ring-blue-500"
                       />
-                      
-                      {currentDoc.diagramCode && (
-                        <div className="mt-16 pt-10 border-t border-slate-100">
-                          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-[0.3em] mb-6 text-center">Structural Workflow</h3>
-                          <div className="p-8 bg-slate-50 rounded-3xl border border-slate-100">
-                            <MermaidDiagram chart={currentDoc.diagramCode} />
-                          </div>
-                          <p className="text-[10px] text-slate-400 font-bold text-center mt-4">Document Hash: {currentDoc.id}</p>
-                        </div>
-                      )}
-                    </article>
-                  )}
-                </div>
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Mermaid Script</label>
+                      <textarea 
+                        value={currentDoc.diagramCode || ''}
+                        onChange={(e) => setCurrentDoc({ ...currentDoc, diagramCode: e.target.value })}
+                        className="w-full h-[200px] p-8 bg-slate-50 rounded-[2rem] border-none font-mono text-sm leading-relaxed focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <article className="prose prose-slate max-w-none prose-headings:font-serif prose-headings:tracking-tight prose-a:text-blue-600">
+                    <div dangerouslySetInnerHTML={{ __html: marked.parse(currentDoc.content) }} />
+                    {currentDoc.diagramCode && (
+                      <MermaidDiagram chart={currentDoc.diagramCode} />
+                    )}
+                  </article>
+                )}
 
-                <footer className="mt-32 pt-10 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center md:items-end gap-10">
-                   <div className="text-[10px] text-slate-400 uppercase tracking-widest leading-relaxed text-center md:text-left">
-                     <p className="font-bold text-slate-500 mb-1">DocuCraft Pro Systems</p>
-                     <p>© 2024 Infrastrux Solutions. Confidential Property.</p>
-                   </div>
-                   <div className="text-center md:text-right">
-                     <div className="h-16 w-56 border-b border-slate-300 mb-2 bg-slate-50/50"></div>
-                     <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">{currentDoc.author}</p>
-                     <p className="text-[10px] text-slate-400 uppercase tracking-widest">Authorized Signature</p>
-                   </div>
-                </footer>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {(isLoading || isRefining) && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-[100] flex items-center justify-center p-6 no-print">
-            <div className="bg-slate-900 p-12 rounded-[40px] shadow-2xl max-w-md w-full text-center space-y-10 border border-slate-800 animate-in zoom-in">
-              <div className="relative w-24 h-24 mx-auto">
-                <div className="absolute inset-0 rounded-full border-[6px] border-slate-800"></div>
-                <div className="absolute inset-0 rounded-full border-[6px] border-t-blue-500 animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center text-blue-500">
-                  <Sparkles className="w-10 h-10 animate-pulse" />
-                </div>
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-white mb-3">
-                  {isLoading ? (inputs.attachment ? 'Analyzing Technical Assets' : 'Synthesizing Architecture') : 'Refining Technical Logic'}
-                </h3>
-                <p className="text-slate-400 text-sm leading-relaxed px-4">
-                  AI is crafting high-fidelity engineering documentation {inputs.attachment ? 'incorporating your uploaded reference materials' : 'based on your technical scope'}.
-                </p>
-              </div>
-              <div className="flex gap-2 justify-center">
-                <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce"></div>
-                <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce [animation-delay:-.3s]"></div>
-                <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce [animation-delay:-.5s]"></div>
+                {/* Refinement Interface */}
+                {!isEditing && (
+                  <div className="mt-20 pt-12 border-t border-slate-100 no-print">
+                    <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100">
+                      <div className="flex items-center gap-2 mb-6">
+                        <Sparkles size={16} className="text-blue-600" />
+                        <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">AI Content Refinement</h3>
+                      </div>
+                      <div className="relative">
+                        <textarea 
+                          placeholder="e.g. Expand the technical breakdown section or add more detail to the security protocols..."
+                          value={refinePrompt}
+                          onChange={(e) => setRefinePrompt(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-2xl p-5 pr-16 focus:ring-2 focus:ring-blue-500 transition-all font-medium text-sm min-h-[100px] resize-none shadow-sm"
+                        />
+                        <button 
+                          onClick={handleRefine}
+                          disabled={isRefining || !refinePrompt.trim()}
+                          className="absolute bottom-4 right-4 bg-slate-900 text-white p-3 rounded-xl hover:bg-blue-600 disabled:bg-slate-200 transition-all shadow-lg"
+                        >
+                          {isRefining ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
+                        </button>
+                      </div>
+                      <p className="mt-4 text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center">Refinement updates the content and diagram in real-time</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
