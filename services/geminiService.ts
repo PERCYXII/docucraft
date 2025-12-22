@@ -2,7 +2,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DocType, ProjectInputs } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY || '' });
+// WRONG
+// const apiKey = process.env.VITE_GEMINI_API_KEY;
+
+// RIGHT
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
 
 export const generateDocument = async (inputs: ProjectInputs) => {
   const systemPrompt = `You are a professional technical writer and senior architect. 
@@ -40,7 +45,7 @@ export const generateDocument = async (inputs: ProjectInputs) => {
     });
   }
 
-  const response = await ai.models.generateContent({
+  const response = await apiKey.models.generateContent({
     model: "gemini-3-pro-preview",
     contents: { parts },
     config: {
@@ -69,7 +74,7 @@ export const refineDocument = async (currentContent: string, currentDiagram: str
   - Remove subgraphs if they cause layout issues.
   - Example: A["User Interface"] --> B["API Service"]`;
 
-  const response = await ai.models.generateContent({
+  const response = await apiKey.models.generateContent({
     model: "gemini-3-pro-preview",
     contents: `Current Content: ${currentContent}\n\nCurrent Diagram: ${currentDiagram}\n\nAdjustment: ${instruction}`,
     config: {
