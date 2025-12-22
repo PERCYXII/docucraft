@@ -2,8 +2,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DocType, ProjectInputs } from "../types";
 
-// Initialize the Google GenAI client with the API key from environment variables.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
 export const generateDocument = async (inputs: ProjectInputs) => {
   const systemPrompt = `You are a professional technical writer and senior architect. 
