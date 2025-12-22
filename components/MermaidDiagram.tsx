@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+import mermaid from 'mermaid';
 
 interface MermaidDiagramProps {
   chart: string;
