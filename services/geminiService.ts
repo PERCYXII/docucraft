@@ -2,39 +2,46 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DocType, ProjectInputs } from "../types";
 
-// WRONG
-// const apiKey = process.env.VITE_GEMINI_API_KEY;
+// Always use the API_KEY directly from process.env as per guidelines
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// RIGHT
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+const BASE_SYSTEM_INSTRUCTION = `You are a professional technical writer and senior systems architect. 
+Create highly detailed, corporate-quality architectural documents.
 
+DOCUMENT STANDARDS:
+- Use industry-standard engineering terminology (e.g., latency, throughput, scalability, abstraction).
+- Use professional Markdown styling with clear headings, tables, and lists.
+- For "Project Playbooks", focus on execution strategy and milestones.
+- For "Scope of Work", focus on boundaries, deliverables, and requirements.
+- For "Build Guides", focus on step-by-step technical implementation.
+
+REVISION HISTORY REQUIREMENT:
+- Every document MUST start with a "DOCUMENT REVISION HISTORY" section (before the main introduction).
+- This section must be a table with columns: Version, Date, Author, and Description.
+- Include an initial entry: Version 1.0, current date, author name, and "Initial Document Generation".
+
+MERMAID DIAGRAM RULES (STRICT):
+1. Use 'graph TD' for all flowcharts.
+2. Syntax: Use ID["Label"] format for nodes.
+3. Labels: ALWAYS wrap labels in double quotes. 
+   - Good: A["User Interface"] --> B["API Service"]
+   - Bad: A[User Interface]
+4. Do NOT use complex shapes (subgraphs, parentheses, etc.) unless specifically needed for clarity, and keep them simple.
+5. All labels should be concise but descriptive.`;
 
 export const generateDocument = async (inputs: ProjectInputs) => {
-  const systemPrompt = `You are a professional technical writer and senior architect. 
-  Create a highly detailed, corporate-quality document for: ${inputs.type}.
-  Project: ${inputs.projectName} | Client: ${inputs.clientName}.
+  const prompt = `Generate a professional ${inputs.type} document.
+  Project: ${inputs.projectName}
+  Client: ${inputs.clientName}
+  Lead: ${inputs.author}
+  Context/Scope: ${inputs.description}
   
-  DOCUMENT STRUCTURE:
-  - Professional summary, objectives, detailed technical breakdown, and conclusion.
-  - Use high-level engineering terminology.
-  
-  MULTIMODAL INSTRUCTIONS:
-  - If an attachment (image or document) is provided, analyze it thoroughly.
-  - Incorporate specific technical details from the attachment into the text and diagrams.
+  Please provide:
+  1. A comprehensive markdown document starting with a revision history table.
+  2. A matching system architecture diagram in Mermaid.js syntax.`;
 
-  MERMAID DIAGRAM RULES (CRITICAL):
-  1. Use 'graph TD' for all flowcharts.
-  2. STRICT SYNTAX: Use only the [ID]["Label"] format for nodes.
-     - CORRECT: A["Detailed Step Description"]
-     - DO NOT use (), (([])), {{}}, or (()) shapes.
-     - DO NOT use subgraphs.
-  3. ALL labels must be wrapped in double quotes to handle special characters like &, /, (, ).
-  4. Ensure all node IDs are simple alphanumeric characters (e.g., A, B, C1, Step1).
-  5. Avoid using reserved Mermaid keywords as node IDs.`;
-
-  const parts: any[] = [
-    { text: `Generate a professional ${inputs.type} document. Project Context: ${inputs.description}` }
-  ];
+  // Define parts for potential multimodal support
+  const parts: any[] = [{ text: prompt }];
 
   if (inputs.attachment) {
     parts.push({
@@ -45,11 +52,12 @@ export const generateDocument = async (inputs: ProjectInputs) => {
     });
   }
 
-  const response = await apiKey.models.generateContent({
+  // Use ai.models.generateContent with model name and contents (Content object)
+  const response = await ai.models.generateContent({
     model: "gemini-3-pro-preview",
     contents: { parts },
     config: {
-      systemInstruction: systemPrompt,
+      systemInstruction: BASE_SYSTEM_INSTRUCTION,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -62,23 +70,31 @@ export const generateDocument = async (inputs: ProjectInputs) => {
     }
   });
 
-  return JSON.parse(response.text);
+  // response.text is a property, not a method
+  return JSON.parse(response.text || "{}");
 };
 
 export const refineDocument = async (currentContent: string, currentDiagram: string, instruction: string) => {
-  const systemPrompt = `Update technical documentation.
-  Instruction: "${instruction}".
+  const refinePrompt = `Update the existing document based on the following instruction: "${instruction}"
   
-  DIAGRAM REFINEMENT:
-  - If fixing a diagram error: Use 'graph TD', simple node IDs, and wrap ALL labels in DOUBLE QUOTES.
-  - Remove subgraphs if they cause layout issues.
-  - Example: A["User Interface"] --> B["API Service"]`;
+  CURRENT CONTENT:
+  ${currentContent}
+  
+  CURRENT DIAGRAM:
+  ${currentDiagram}
+  
+  Your task:
+  - Modify the content to satisfy the instruction while maintaining professional tone.
+  - Update the diagram if the change affects architecture.
+  - If appropriate, add a new row to the DOCUMENT REVISION HISTORY table (e.g. Version 1.1) summarizing these changes.
+  - Return the full updated content and diagram.`;
 
-  const response = await apiKey.models.generateContent({
+  // Fix: contents must be a string or a Content object (with parts array)
+  const response = await ai.models.generateContent({
     model: "gemini-3-pro-preview",
-    contents: `Current Content: ${currentContent}\n\nCurrent Diagram: ${currentDiagram}\n\nAdjustment: ${instruction}`,
+    contents: refinePrompt,
     config: {
-      systemInstruction: systemPrompt,
+      systemInstruction: BASE_SYSTEM_INSTRUCTION,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -91,5 +107,29 @@ export const refineDocument = async (currentContent: string, currentDiagram: str
     }
   });
 
-  return JSON.parse(response.text);
+  // response.text is a property, not a method
+  return JSON.parse(response.text || "{}");
+};
+
+export const getNodeAnalysis = async (nodeLabel: string, docContext: string) => {
+  const systemPrompt = `You are a technical consultant. Provide a detailed analysis for a specific component.
+  Component: ${nodeLabel}
+  
+  Structure your response:
+  1. Overview & Purpose
+  2. Technical Specifications
+  3. Integration Requirements
+  4. Security Considerations`;
+
+  // Use ai.models.generateContent with model name and contents string
+  const response = await ai.models.generateContent({
+    model: "gemini-3-pro-preview",
+    contents: `Based on this document context: "${docContext}", provide a deep-dive analysis for the architecture node: "${nodeLabel}".`,
+    config: {
+      systemInstruction: systemPrompt,
+    }
+  });
+
+  // response.text is a property, not a method
+  return response.text;
 };
