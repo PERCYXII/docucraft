@@ -11,13 +11,13 @@ async function retryWithBackoff<T>(
   baseDelay = 1000
 ): Promise<T> {
   let lastError: any;
-  
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error: any) {
       lastError = error;
-      
+
       // Check if it's a rate limit error (429)
       if (error?.message?.includes('429') || error?.message?.includes('Too Many Requests')) {
         if (attempt < maxRetries - 1) {
@@ -27,12 +27,12 @@ async function retryWithBackoff<T>(
           continue;
         }
       }
-      
+
       // For other errors, throw immediately
       throw error;
     }
   }
-  
+
   throw new Error(`Failed after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
 }
 
@@ -53,21 +53,25 @@ export const generateDocument = async (inputs: ProjectInputs) => {
   2. NEVER use subgraph - IT IS FORBIDDEN
   3. NEVER use "end" keyword
   4. Node format ONLY: ID["Label Text"]
-  5. Connection format ONLY: A --> B
+  5. Connection format ONLY: A --> B (MUST have both source AND target)
   6. Labels can contain: letters, numbers, spaces, hyphens only
   7. NO special characters in labels: no (), {}, [], quotes inside labels
+  8. EVERY arrow (-->) MUST connect two valid nodes
+  9. NEVER leave arrows incomplete (e.g., "A -->" without a target)
   
   CORRECT EXAMPLE:
   graph TD
-  A["User Login"] --> B["Verify Credentials"]
-  B --> C["Access Dashboard"]
-  C --> D["View Reports"]
+  User["User Login"] --> Auth["Verify Credentials"]
+  Auth --> Dashboard["Access Dashboard"]
+  Dashboard --> Reports["View Reports"]
   
   FORBIDDEN - DO NOT USE:
   - subgraph anything
   - end
   - styling or classes
   - complex shapes like (()) or {{}}
+  - incomplete connections (A --> with no target)
+  - orphaned arrows (-->  B with no source)
   
   You must respond ONLY with valid JSON in this exact format:
   {
@@ -76,7 +80,7 @@ export const generateDocument = async (inputs: ProjectInputs) => {
   }`;
 
   let userPrompt = `Generate a professional ${inputs.type} document. Project Context: ${inputs.description}`;
-  
+
   if (inputs.attachment) {
     userPrompt += `\n\nNote: An attachment was provided but DeepSeek doesn't support multimodal input yet. Please generate based on the text description.`;
   }
@@ -105,7 +109,7 @@ export const generateDocument = async (inputs: ProjectInputs) => {
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
-    
+
     if (!content) {
       throw new Error('No content in API response');
     }
@@ -122,13 +126,20 @@ export const refineDocument = async (currentContent: string, currentDiagram: str
   1. Output ONLY "graph TD" header
   2. NEVER use subgraph or end keywords
   3. Node format: ID["Label Text"]
-  4. Connection: A --> B
+  4. Connection: A --> B (MUST have both source AND target)
   5. NO special characters in labels except spaces and hyphens
+  6. EVERY arrow MUST connect two valid nodes
+  7. NEVER leave arrows incomplete
   
-  EXAMPLE:
+  CORRECT EXAMPLE:
   graph TD
-  A["Step One"] --> B["Step Two"]
-  B --> C["Step Three"]
+  Start["Step One"] --> Process["Step Two"]
+  Process --> End["Step Three"]
+  
+  WRONG - DO NOT DO THIS:
+  graph TD
+  Start["Step One"] -->
+  --> Process["Step Two"]
   
   You must respond ONLY with valid JSON in this exact format:
   {
@@ -160,7 +171,7 @@ export const refineDocument = async (currentContent: string, currentDiagram: str
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
-    
+
     if (!content) {
       throw new Error('No content in API response');
     }
