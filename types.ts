@@ -8,6 +8,7 @@ export enum DocType {
 
 export interface DocumentData {
   id: string;
+  rootId?: string; // Links all versions of the same document
   type: DocType;
   projectName: string;
   clientName: string;
@@ -15,6 +16,7 @@ export interface DocumentData {
   date: string;
   content: string;
   diagramCode?: string;
+  createdAt?: string;
 }
 
 export interface Attachment {

@@ -1,135 +1,171 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
 import { DocType, ProjectInputs } from "../types";
 
-// Always use the API_KEY directly from process.env as per guidelines
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Use local API endpoint to avoid CORS issues
+const API_URL = '/api/generate';
 
-const BASE_SYSTEM_INSTRUCTION = `You are a professional technical writer and senior systems architect. 
-Create highly detailed, corporate-quality architectural documents.
-
-DOCUMENT STANDARDS:
-- Use industry-standard engineering terminology (e.g., latency, throughput, scalability, abstraction).
-- Use professional Markdown styling with clear headings, tables, and lists.
-- For "Project Playbooks", focus on execution strategy and milestones.
-- For "Scope of Work", focus on boundaries, deliverables, and requirements.
-- For "Build Guides", focus on step-by-step technical implementation.
-
-REVISION HISTORY REQUIREMENT:
-- Every document MUST start with a "DOCUMENT REVISION HISTORY" section (before the main introduction).
-- This section must be a table with columns: Version, Date, Author, and Description.
-- Include an initial entry: Version 1.0, current date, author name, and "Initial Document Generation".
-
-MERMAID DIAGRAM RULES (STRICT):
-1. Use 'graph TD' for all flowcharts.
-2. Syntax: Use ID["Label"] format for nodes.
-3. Labels: ALWAYS wrap labels in double quotes. 
-   - Good: A["User Interface"] --> B["API Service"]
-   - Bad: A[User Interface]
-4. Do NOT use complex shapes (subgraphs, parentheses, etc.) unless specifically needed for clarity, and keep them simple.
-5. All labels should be concise but descriptive.`;
+// Retry helper with exponential backoff for rate limits
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelay = 1000
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a rate limit error (429)
+      if (error?.message?.includes('429') || error?.message?.includes('Too Many Requests')) {
+        if (attempt < maxRetries - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          console.log(`Rate limited. Retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      
+      // For other errors, throw immediately
+      throw error;
+    }
+  }
+  
+  throw new Error(`Failed after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
+}
 
 export const generateDocument = async (inputs: ProjectInputs) => {
-  const prompt = `Generate a professional ${inputs.type} document.
-  Project: ${inputs.projectName}
-  Client: ${inputs.clientName}
-  Lead: ${inputs.author}
-  Context/Scope: ${inputs.description}
+  const systemPrompt = `You are a professional technical writer and senior architect at INFRASTRUX. 
+  Create a highly detailed, corporate-quality document for: ${inputs.type}.
+  Project: ${inputs.projectName} | Client: ${inputs.clientName}.
   
-  Please provide:
-  1. A comprehensive markdown document starting with a revision history table.
-  2. A matching system architecture diagram in Mermaid.js syntax.`;
+  DOCUMENT STRUCTURE:
+  - Professional summary, objectives, detailed technical breakdown, and conclusion.
+  - Use high-level engineering terminology.
+  
+  MULTIMODAL INSTRUCTIONS:
+  - If an attachment is provided, analyze it and incorporate specific technical details.
 
-  // Define parts for potential multimodal support
-  const parts: any[] = [{ text: prompt }];
+  MERMAID DIAGRAM RULES (CRITICAL - FOLLOW EXACTLY):
+  1. Start with ONLY "graph TD" on the first line
+  2. NEVER use subgraph - IT IS FORBIDDEN
+  3. NEVER use "end" keyword
+  4. Node format ONLY: ID["Label Text"]
+  5. Connection format ONLY: A --> B
+  6. Labels can contain: letters, numbers, spaces, hyphens only
+  7. NO special characters in labels: no (), {}, [], quotes inside labels
+  
+  CORRECT EXAMPLE:
+  graph TD
+  A["User Login"] --> B["Verify Credentials"]
+  B --> C["Access Dashboard"]
+  C --> D["View Reports"]
+  
+  FORBIDDEN - DO NOT USE:
+  - subgraph anything
+  - end
+  - styling or classes
+  - complex shapes like (()) or {{}}
+  
+  You must respond ONLY with valid JSON in this exact format:
+  {
+    "content": "the full markdown content",
+    "diagramCode": "the mermaid diagram code"
+  }`;
 
+  let userPrompt = `Generate a professional ${inputs.type} document. Project Context: ${inputs.description}`;
+  
   if (inputs.attachment) {
-    parts.push({
-      inlineData: {
-        data: inputs.attachment.data,
-        mimeType: inputs.attachment.mimeType
-      }
-    });
+    userPrompt += `\n\nNote: An attachment was provided but DeepSeek doesn't support multimodal input yet. Please generate based on the text description.`;
   }
 
-  // Use ai.models.generateContent with model name and contents (Content object)
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: { parts },
-    config: {
-      systemInstruction: BASE_SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          content: { type: Type.STRING, description: "The full markdown content." },
-          diagramCode: { type: Type.STRING, description: "The Mermaid.js diagram code." }
-        },
-        required: ["content", "diagramCode"]
-      }
-    }
-  });
+  return retryWithBackoff(async () => {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        response_format: { type: 'json_object' }
+      })
+    });
 
-  // response.text is a property, not a method
-  return JSON.parse(response.text || "{}");
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    
+    if (!content) {
+      throw new Error('No content in API response');
+    }
+
+    return JSON.parse(content);
+  });
 };
 
 export const refineDocument = async (currentContent: string, currentDiagram: string, instruction: string) => {
-  const refinePrompt = `Update the existing document based on the following instruction: "${instruction}"
+  const systemPrompt = `Update technical documentation based on instruction.
+  Instruction: "${instruction}".
   
-  CURRENT CONTENT:
-  ${currentContent}
+  MERMAID REFINEMENT RULES (CRITICAL):
+  1. Output ONLY "graph TD" header
+  2. NEVER use subgraph or end keywords
+  3. Node format: ID["Label Text"]
+  4. Connection: A --> B
+  5. NO special characters in labels except spaces and hyphens
   
-  CURRENT DIAGRAM:
-  ${currentDiagram}
+  EXAMPLE:
+  graph TD
+  A["Step One"] --> B["Step Two"]
+  B --> C["Step Three"]
   
-  Your task:
-  - Modify the content to satisfy the instruction while maintaining professional tone.
-  - Update the diagram if the change affects architecture.
-  - If appropriate, add a new row to the DOCUMENT REVISION HISTORY table (e.g. Version 1.1) summarizing these changes.
-  - Return the full updated content and diagram.`;
+  You must respond ONLY with valid JSON in this exact format:
+  {
+    "content": "the updated markdown content",
+    "diagramCode": "the updated mermaid diagram code"
+  }`;
 
-  // Fix: contents must be a string or a Content object (with parts array)
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: refinePrompt,
-    config: {
-      systemInstruction: BASE_SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          content: { type: Type.STRING },
-          diagramCode: { type: Type.STRING }
-        },
-        required: ["content", "diagramCode"]
-      }
+  return retryWithBackoff(async () => {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Current Content: ${currentContent}\n\nCurrent Diagram: ${currentDiagram}\n\nAdjustment: ${instruction}` }
+        ],
+        temperature: 0.7,
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`API error: ${response.status} - ${error}`);
     }
-  });
 
-  // response.text is a property, not a method
-  return JSON.parse(response.text || "{}");
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    
+    if (!content) {
+      throw new Error('No content in API response');
+    }
+
+    return JSON.parse(content);
+  });
 };
 
-export const getNodeAnalysis = async (nodeLabel: string, docContext: string) => {
-  const systemPrompt = `You are a technical consultant. Provide a detailed analysis for a specific component.
-  Component: ${nodeLabel}
-  
-  Structure your response:
-  1. Overview & Purpose
-  2. Technical Specifications
-  3. Integration Requirements
-  4. Security Considerations`;
-
-  // Use ai.models.generateContent with model name and contents string
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: `Based on this document context: "${docContext}", provide a deep-dive analysis for the architecture node: "${nodeLabel}".`,
-    config: {
-      systemInstruction: systemPrompt,
-    }
-  });
-
-  // response.text is a property, not a method
-  return response.text;
-};
