@@ -1,24 +1,24 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  PlusCircle, 
-  Printer, 
-  Layout, 
-  Briefcase, 
-  Settings, 
-  Loader2, 
-  Trash2, 
-  DatabaseZap, 
-  AlertCircle, 
-  Edit3, 
-  Eye, 
-  Sparkles, 
-  CheckCircle2, 
-  Upload, 
-  X, 
-  FileUp, 
-  Info, 
-  Cpu, 
+import {
+  PlusCircle,
+  Printer,
+  Layout,
+  Briefcase,
+  Settings,
+  Loader2,
+  Trash2,
+  DatabaseZap,
+  AlertCircle,
+  Edit3,
+  Eye,
+  Sparkles,
+  CheckCircle2,
+  Upload,
+  X,
+  FileUp,
+  Info,
+  Cpu,
   User,
   RefreshCcw,
   History,
@@ -60,7 +60,7 @@ const App: React.FC = () => {
     author: '',
     description: ''
   });
-  
+
   const [currentDoc, setCurrentDoc] = useState<DocumentData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -72,9 +72,9 @@ const App: React.FC = () => {
   const [dbError, setDbError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  
+
   // Interaction States
-  const [selectedNode, setSelectedNode] = useState<{id: string, label: string} | null>(null);
+  const [selectedNode, setSelectedNode] = useState<{ id: string, label: string } | null>(null);
   const [nodeAnalysis, setNodeAnalysis] = useState<string | null>(null);
   const [isAnalyzingNode, setIsAnalyzingNode] = useState(false);
 
@@ -102,7 +102,7 @@ const App: React.FC = () => {
         if (error.code === '42P01') throw new Error("Database table 'documents' does not exist.");
         throw new Error(error.message || "Failed to query the vault");
       }
-      
+
       if (data) {
         const formattedData: DocumentData[] = data.map(item => ({
           id: item.id,
@@ -110,8 +110,8 @@ const App: React.FC = () => {
           projectName: item.project_name,
           clientName: item.client_name,
           author: item.author,
-          date: new Date(item.created_at).toLocaleDateString('en-US', { 
-            year: 'numeric', month: 'long', day: 'numeric' 
+          date: new Date(item.created_at).toLocaleDateString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric'
           }),
           content: item.content,
           diagramCode: item.diagram_code
@@ -157,12 +157,12 @@ const App: React.FC = () => {
       if (currentDoc?.id === id) setCurrentDoc(null);
       return;
     }
-    
+
     if (!confirm("Are you sure you want to permanently delete this document?")) return;
-    
+
     const previousHistory = [...history];
     setHistory(history.filter(doc => doc.id !== id));
-    
+
     try {
       const { error } = await supabase.from('documents').delete().eq('id', id);
       if (error) throw error;
@@ -332,7 +332,7 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
             <p className="text-[9px] text-blue-500 font-bold uppercase tracking-[0.3em]">Architectural Suite</p>
           </div>
         </div>
-        
+
         <nav className="space-y-2 flex-grow overflow-y-auto custom-scrollbar pr-2">
           <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
             <Settings className="w-3 h-3" /> System Controls
@@ -341,13 +341,13 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
             <PlusCircle className="w-4 h-4" />
             <span className="font-bold text-sm">New Document</span>
           </button>
-          
+
           {!currentDoc && (
-             <button onClick={loadExample} className="w-full flex items-center gap-3 px-5 py-3.5 rounded-2xl hover:bg-blue-600/10 text-slate-400 hover:text-blue-400 border border-transparent hover:border-blue-600/30 transition-all mt-2 group">
-                <BookOpen className="w-4 h-4" />
-                <span className="font-bold text-sm">Load Website Audit</span>
-                <ArrowRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
-             </button>
+            <button onClick={loadExample} className="w-full flex items-center gap-3 px-5 py-3.5 rounded-2xl hover:bg-blue-600/10 text-slate-400 hover:text-blue-400 border border-transparent hover:border-blue-600/30 transition-all mt-2 group">
+              <BookOpen className="w-4 h-4" />
+              <span className="font-bold text-sm">Load Website Audit</span>
+              <ArrowRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
+            </button>
           )}
 
           <div className="mt-14">
@@ -368,23 +368,23 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
               </div>
             ) : history.length === 0 ? (
               <div className="px-6 py-12 text-center bg-slate-900/40 rounded-3xl border border-dashed border-slate-800">
-                <p className="text-[11px] text-slate-600 font-bold uppercase tracking-widest leading-relaxed">Encryption Active.<br/>Vault Empty.</p>
+                <p className="text-[11px] text-slate-600 font-bold uppercase tracking-widest leading-relaxed">Encryption Active.<br />Vault Empty.</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {history.map(doc => (
-                  <button 
-                    key={doc.id} 
-                    onClick={() => { setCurrentDoc(doc); setIsEditing(false); setSelectedNode(null); }} 
+                  <button
+                    key={doc.id}
+                    onClick={() => { setCurrentDoc(doc); setIsEditing(false); setSelectedNode(null); }}
                     className={`group w-full text-left flex items-center justify-between px-5 py-4 rounded-2xl transition-all text-sm ${currentDoc?.id === doc.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/30' : 'hover:bg-slate-900 text-slate-500 hover:text-white'}`}
                   >
                     <div className="truncate flex-1">
                       <p className="font-black truncate text-xs">{doc.projectName}</p>
                       <p className={`text-[8px] font-black uppercase tracking-widest mt-1 ${currentDoc?.id === doc.id ? 'text-blue-100/60' : 'text-slate-700'}`}>{doc.type}</p>
                     </div>
-                    <Trash2 
+                    <Trash2
                       onClick={(e) => handleDelete(doc.id, e)}
-                      className={`w-3.5 h-3.5 ml-3 opacity-0 group-hover:opacity-100 transition-all hover:text-red-400`} 
+                      className={`w-3.5 h-3.5 ml-3 opacity-0 group-hover:opacity-100 transition-all hover:text-red-400`}
                     />
                   </button>
                 ))}
@@ -392,7 +392,7 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
             )}
           </div>
         </nav>
-        
+
         <div className="mt-auto pt-8 border-t border-slate-900 flex items-center gap-4">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isSupabaseConfigured ? 'bg-emerald-500/10 shadow-inner' : 'bg-amber-500/10'}`}>
             <DatabaseZap className={`w-5 h-5 ${isSupabaseConfigured ? 'text-emerald-500' : 'text-amber-500'}`} />
@@ -419,9 +419,9 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
                 <div className="space-y-3 md:col-span-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Settings className="w-3.5 h-3.5 text-blue-600" /> Synthesis Template</label>
                   <div className="relative">
-                    <select 
-                      value={inputs.type} 
-                      onChange={e => setInputs({...inputs, type: e.target.value as DocType})} 
+                    <select
+                      value={inputs.type}
+                      onChange={e => setInputs({ ...inputs, type: e.target.value as DocType })}
                       className="w-full px-8 py-5 rounded-2xl border-2 border-slate-100 outline-none bg-slate-50 hover:bg-white focus:bg-white focus:border-blue-600/20 focus:ring-8 focus:ring-blue-500/5 transition-all font-bold appearance-none cursor-pointer text-slate-800"
                     >
                       {Object.values(DocType).map(type => <option key={type} value={type}>{type}</option>)}
@@ -432,40 +432,40 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
 
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Briefcase className="w-3.5 h-3.5 text-blue-600" /> Project Identifier</label>
-                  <input 
-                    type="text" 
-                    value={inputs.projectName} 
-                    onChange={e => setInputs({...inputs, projectName: e.target.value})} 
-                    placeholder="e.g. Nexus API Modernization" 
-                    className="w-full px-8 py-5 rounded-2xl border-2 border-slate-100 outline-none bg-slate-50 focus:bg-white focus:border-blue-600/20 focus:ring-8 focus:ring-blue-500/5 transition-all font-bold" 
+                  <input
+                    type="text"
+                    value={inputs.projectName}
+                    onChange={e => setInputs({ ...inputs, projectName: e.target.value })}
+                    placeholder="e.g. Nexus API Modernization"
+                    className="w-full px-8 py-5 rounded-2xl border-2 border-slate-100 outline-none bg-slate-50 focus:bg-white focus:border-blue-600/20 focus:ring-8 focus:ring-blue-500/5 transition-all font-bold"
                   />
                 </div>
 
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-blue-600" /> Client Entity</label>
-                  <input 
-                    type="text" 
-                    value={inputs.clientName} 
-                    onChange={e => setInputs({...inputs, clientName: e.target.value})} 
-                    placeholder="e.g. Stark Industries" 
-                    className="w-full px-8 py-5 rounded-2xl border-2 border-slate-100 outline-none bg-slate-50 focus:bg-white focus:border-blue-600/20 focus:ring-8 focus:ring-blue-500/5 transition-all font-bold" 
+                  <input
+                    type="text"
+                    value={inputs.clientName}
+                    onChange={e => setInputs({ ...inputs, clientName: e.target.value })}
+                    placeholder="e.g. Stark Industries"
+                    className="w-full px-8 py-5 rounded-2xl border-2 border-slate-100 outline-none bg-slate-50 focus:bg-white focus:border-blue-600/20 focus:ring-8 focus:ring-blue-500/5 transition-all font-bold"
                   />
                 </div>
 
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><User className="w-3.5 h-3.5 text-blue-600" /> Project Lead</label>
-                  <input 
-                    type="text" 
-                    value={inputs.author} 
-                    onChange={e => setInputs({...inputs, author: e.target.value})} 
-                    placeholder="Lead Architect name..." 
-                    className="w-full px-8 py-5 rounded-2xl border-2 border-slate-100 outline-none bg-slate-50 focus:bg-white focus:border-blue-600/20 focus:ring-8 focus:ring-blue-500/5 transition-all font-bold" 
+                  <input
+                    type="text"
+                    value={inputs.author}
+                    onChange={e => setInputs({ ...inputs, author: e.target.value })}
+                    placeholder="Lead Architect name..."
+                    className="w-full px-8 py-5 rounded-2xl border-2 border-slate-100 outline-none bg-slate-50 focus:bg-white focus:border-blue-600/20 focus:ring-8 focus:ring-blue-500/5 transition-all font-bold"
                   />
                 </div>
 
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><FileUp className="w-3.5 h-3.5 text-blue-600" /> Attachment Data (Opt)</label>
-                  <div 
+                  <div
                     onClick={() => fileInputRef.current?.click()}
                     onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                     onDragLeave={() => setIsDragging(false)}
@@ -489,11 +489,11 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
 
                 <div className="col-span-1 md:col-span-2 space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Architectural Context & Detailed Requirements</label>
-                  <textarea 
-                    rows={6} 
-                    value={inputs.description} 
-                    onChange={e => setInputs({...inputs, description: e.target.value})} 
-                    placeholder="Provide deep technical context, workflows, or specific instructions for the synthesis engine..." 
+                  <textarea
+                    rows={6}
+                    value={inputs.description}
+                    onChange={e => setInputs({ ...inputs, description: e.target.value })}
+                    placeholder="Provide deep technical context, workflows, or specific instructions for the synthesis engine..."
                     className="w-full px-8 py-6 rounded-[2rem] border-2 border-slate-100 outline-none bg-slate-50 focus:bg-white focus:border-blue-600/20 focus:ring-8 focus:ring-blue-500/5 transition-all resize-none font-bold text-slate-800 leading-relaxed"
                   ></textarea>
                 </div>
@@ -511,9 +511,9 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
                     </p>
                   </div>
                 </div>
-                <button 
-                  onClick={handleGenerate} 
-                  disabled={isLoading} 
+                <button
+                  onClick={handleGenerate}
+                  disabled={isLoading}
                   className="w-full lg:w-auto bg-slate-950 hover:bg-blue-600 text-white font-black py-6 px-16 rounded-[2rem] flex items-center justify-center gap-4 transition-all transform active:scale-95 disabled:opacity-50 shadow-3xl shadow-blue-600/10 group uppercase tracking-[0.2em] text-sm"
                 >
                   {isLoading ? <><Loader2 className="w-6 h-6 animate-spin" /> Finalizing Synthesis...</> : <><Sparkles className="w-6 h-6" /> Synthesize Document</>}
@@ -545,29 +545,29 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
 
               {/* Document Paper Surface */}
               <div className="bg-white p-[1.5cm] md:p-[2.5cm] min-h-[29.7cm] shadow-4xl border border-slate-200 rounded-[3rem] letterhead-page mb-10 relative overflow-hidden transition-all ring-1 ring-slate-100">
-                <Letterhead 
-                  projectName={currentDoc.projectName} 
-                  clientName={currentDoc.clientName} 
-                  author={currentDoc.author} 
-                  date={currentDoc.date} 
-                  docType={currentDoc.type} 
+                <Letterhead
+                  projectName={currentDoc.projectName}
+                  clientName={currentDoc.clientName}
+                  author={currentDoc.author}
+                  date={currentDoc.date}
+                  docType={currentDoc.type}
                 />
-                
+
                 <div className="mt-20 text-slate-800 leading-relaxed space-y-10">
                   {isEditing ? (
                     <div className="space-y-8 no-print animate-in fade-in">
-                       <div className="flex items-center justify-between gap-3 text-[11px] font-black text-blue-600 uppercase tracking-widest mb-4">
-                         <div className="flex items-center gap-3"><Edit3 className="w-4 h-4" /> Markdown Core Editor</div>
-                         <div className="text-slate-400 font-bold normal-case bg-slate-50 px-4 py-1.5 rounded-lg border border-slate-100">Version 1.2 • Draft Active</div>
-                       </div>
-                       <textarea className="w-full min-h-[700px] p-12 font-mono text-sm bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] outline-none focus:ring-12 focus:ring-blue-500/5 transition-all leading-relaxed shadow-inner" value={currentDoc.content} onChange={(e) => setCurrentDoc({...currentDoc, content: e.target.value})} />
-                       
-                       <div className="flex items-center gap-3 text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-4 mt-12"><Cpu className="w-4 h-4" /> Architectural Logic Engine (Mermaid)</div>
-                       <textarea className="w-full min-h-[220px] p-10 font-mono text-[12px] bg-slate-950 text-emerald-400 border-2 border-slate-900 rounded-[2.5rem] outline-none shadow-2xl" value={currentDoc.diagramCode || ''} onChange={(e) => setCurrentDoc({...currentDoc, diagramCode: e.target.value})} />
+                      <div className="flex items-center justify-between gap-3 text-[11px] font-black text-blue-600 uppercase tracking-widest mb-4">
+                        <div className="flex items-center gap-3"><Edit3 className="w-4 h-4" /> Markdown Core Editor</div>
+                        <div className="text-slate-400 font-bold normal-case bg-slate-50 px-4 py-1.5 rounded-lg border border-slate-100">Version 1.2 • Draft Active</div>
+                      </div>
+                      <textarea className="w-full min-h-[700px] p-12 font-mono text-sm bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] outline-none focus:ring-12 focus:ring-blue-500/5 transition-all leading-relaxed shadow-inner" value={currentDoc.content} onChange={(e) => setCurrentDoc({ ...currentDoc, content: e.target.value })} />
+
+                      <div className="flex items-center gap-3 text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-4 mt-12"><Cpu className="w-4 h-4" /> Architectural Logic Engine (Mermaid)</div>
+                      <textarea className="w-full min-h-[220px] p-10 font-mono text-[12px] bg-slate-950 text-emerald-400 border-2 border-slate-900 rounded-[2.5rem] outline-none shadow-2xl" value={currentDoc.diagramCode || ''} onChange={(e) => setCurrentDoc({ ...currentDoc, diagramCode: e.target.value })} />
                     </div>
                   ) : (
                     <article className="animate-in fade-in duration-700">
-                      <div className="prose prose-slate prose-xl max-w-none prose-headings:font-serif prose-headings:text-slate-950 prose-headings:font-black prose-a:text-blue-600 prose-blockquote:border-l-4 prose-blockquote:border-blue-600 prose-blockquote:bg-blue-50/50 prose-blockquote:py-2 prose-blockquote:px-6 prose-blockquote:rounded-r-xl" dangerouslySetInnerHTML={renderMarkdown(currentDoc.content)} />
+                      <div className="prose prose-slate prose-sm max-w-none prose-headings:font-serif prose-headings:text-slate-950 prose-headings:font-black prose-a:text-blue-600 prose-blockquote:border-l-4 prose-blockquote:border-blue-600 prose-blockquote:bg-blue-50/50 prose-blockquote:py-2 prose-blockquote:px-6 prose-blockquote:rounded-r-xl" dangerouslySetInnerHTML={renderMarkdown(currentDoc.content)} />
                       {currentDoc.diagramCode && (
                         <div className="mt-24 pt-20 border-t-2 border-slate-100">
                           <h3 className="text-[11px] font-black text-slate-300 uppercase tracking-[0.6em] mb-14 text-center">Integration Flow & System Architecture</h3>
@@ -579,14 +579,14 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
                 </div>
 
                 <footer className="mt-40 pt-14 border-t-2 border-slate-50 flex flex-col md:flex-row justify-between items-center md:items-end gap-12 opacity-40">
-                   <div className="text-[10px] text-slate-400 uppercase tracking-[0.2em] leading-relaxed text-center md:text-left font-bold">
-                     <p className="text-slate-950 mb-1.5 font-black">CS TECH SOLUTIONS</p>
-                     <p>© 2024-2025 All Rights Reserved. Document Security Level: Class 4.</p>
-                   </div>
-                   <div className="flex items-center gap-4">
-                      <div className="h-12 w-[2px] bg-slate-200"></div>
-                      <div className="text-[10px] text-slate-950 font-black uppercase tracking-[0.3em] bg-slate-50 px-5 py-2.5 rounded-xl border-2 border-slate-100 shadow-sm">UID: {currentDoc.id.slice(-10).toUpperCase()}</div>
-                   </div>
+                  <div className="text-[10px] text-slate-400 uppercase tracking-[0.2em] leading-relaxed text-center md:text-left font-bold">
+                    <p className="text-slate-950 mb-1.5 font-black">CS TECH SOLUTIONS</p>
+                    <p>© 2024-2025 All Rights Reserved. Document Security Level: Class 4.</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-[2px] bg-slate-200"></div>
+                    <div className="text-[10px] text-slate-950 font-black uppercase tracking-[0.3em] bg-slate-50 px-5 py-2.5 rounded-xl border-2 border-slate-100 shadow-sm">UID: {currentDoc.id.slice(-10).toUpperCase()}</div>
+                  </div>
                 </footer>
               </div>
 
@@ -596,8 +596,8 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
                   <div className="bg-slate-950/95 backdrop-blur-3xl border border-white/10 p-2.5 rounded-[2.5rem] shadow-4xl shadow-blue-900/50 flex items-center gap-3">
                     <div className="flex-1 flex items-center gap-5 px-6">
                       <Wand2 className={`w-6 h-6 text-blue-400 ${isRefining ? 'animate-pulse' : ''}`} />
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={refinePrompt}
                         onChange={e => setRefinePrompt(e.target.value)}
                         onKeyPress={e => e.key === 'Enter' && handleRefine()}
@@ -606,7 +606,7 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
                         disabled={isRefining}
                       />
                     </div>
-                    <button 
+                    <button
                       onClick={handleRefine}
                       disabled={isRefining || !refinePrompt.trim()}
                       className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-[2rem] transition-all disabled:bg-slate-900 disabled:text-slate-700 shadow-xl shadow-blue-600/20"
@@ -635,13 +635,13 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
             </div>
             <button onClick={() => setSelectedNode(null)} className="p-3 hover:bg-white/10 rounded-full transition-all text-slate-400 hover:text-white"><X className="w-8 h-8" /></button>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-slate-50/20 leading-relaxed">
             {isAnalyzingNode ? (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-10">
                 <div className="relative">
-                   <div className="w-24 h-24 rounded-full border-4 border-slate-100 border-t-blue-600 animate-spin"></div>
-                   <Sparkles className="w-8 h-8 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-500 animate-pulse" />
+                  <div className="w-24 h-24 rounded-full border-4 border-slate-100 border-t-blue-600 animate-spin"></div>
+                  <Sparkles className="w-8 h-8 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-500 animate-pulse" />
                 </div>
                 <div className="text-center">
                   <p className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-500 mb-2">Querying Knowledge Base</p>
@@ -661,7 +661,7 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
               </div>
             )}
           </div>
-          
+
           <div className="p-10 bg-white border-t-2 border-slate-50">
             <button onClick={() => setSelectedNode(null)} className="w-full bg-slate-950 text-white py-6 rounded-2xl font-black text-xs uppercase tracking-[0.3em] hover:bg-blue-600 transition-all shadow-3xl shadow-blue-600/10 active:scale-[0.98]">Dismiss Analysis</button>
           </div>
@@ -673,7 +673,7 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
         <div className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-[100] flex items-center justify-center p-8 no-print">
           <div className="bg-slate-900 p-20 rounded-[4rem] shadow-5xl max-w-xl w-full text-center space-y-14 border border-slate-800/50 animate-in zoom-in duration-600 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></div>
-            
+
             <div className="relative w-48 h-48 mx-auto">
               <div className="absolute inset-0 rounded-full border-[14px] border-slate-800/30"></div>
               <div className="absolute inset-0 rounded-full border-[14px] border-t-blue-600 border-r-blue-400/10 animate-spin shadow-[0_0_50px_rgba(37,99,235,0.2)]"></div>
@@ -681,16 +681,16 @@ Ensure "Red Flags" and "Pro-Tips" are included for each step.`
                 <Sparkles className="w-20 h-20 animate-pulse" />
               </div>
             </div>
-            
+
             <div className="space-y-6">
               <h3 className="text-5xl font-black text-white tracking-tighter uppercase">{isLoading ? 'Synthesizing' : 'Syncing'}</h3>
               <p className="text-slate-400 text-lg font-medium leading-relaxed px-10">
-                {isLoading 
-                  ? "Gemini 3 Pro is architecting your technical documentation using high-fidelity reasoning patterns..." 
+                {isLoading
+                  ? "Gemini 3 Pro is architecting your technical documentation using high-fidelity reasoning patterns..."
                   : "Securing document metadata and synchronizing with the Enterprise Cloud Vault..."}
               </p>
             </div>
-            
+
             <div className="flex justify-center gap-4">
               <div className="w-3 h-3 rounded-full bg-blue-700 animate-bounce [animation-delay:-0.3s]"></div>
               <div className="w-3 h-3 rounded-full bg-blue-600 animate-bounce [animation-delay:-0.15s]"></div>

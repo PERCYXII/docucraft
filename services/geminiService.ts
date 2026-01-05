@@ -1,9 +1,13 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai/web";
 import { DocType, ProjectInputs } from "../types";
 
-// Always use the API_KEY directly from process.env as per guidelines
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Always use the API_KEY directly from import.meta.env for Vite
+const apiKey = import.meta.env.VITE_GOOGLE_API_KEY || import.meta.env.VITE_API_KEY;
+if (!apiKey) {
+  console.warn("Missing VITE_GOOGLE_API_KEY or VITE_API_KEY");
+}
+const ai = new GoogleGenAI({ apiKey: apiKey || "" });
 
 const BASE_SYSTEM_INSTRUCTION = `You are a world-class Technical Consultant and Senior Systems Architect from a top-tier firm like McKinsey or Accenture.
 Your goal is to create high-fidelity, corporate-grade technical documents that are actionable, authoritative, and visually structured.
