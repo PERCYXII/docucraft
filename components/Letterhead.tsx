@@ -10,66 +10,58 @@ interface LetterheadProps {
 }
 
 const Letterhead: React.FC<LetterheadProps> = ({ projectName, clientName, author, date, docType }) => {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  const logoUrl = supabaseUrl
-    ? `${supabaseUrl}/storage/v1/object/public/logo/Generated_Image_October_24__2025_-_10_58AM-removebg-preview.png`
-    : '/vite.svg'; // Fallback to default logo
-
   return (
-    <header className="mb-12 border-b-[3px] border-slate-900 pb-10 relative overflow-hidden">
-      {/* Subtle Architectural Grid Pattern Overlay */}
-      <div className="absolute top-0 right-0 w-64 h-64 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-
-      <div className="flex flex-col md:flex-row justify-between items-start gap-6 relative z-10">
+    <header className="mb-12 relative">
+      <div className="flex justify-between items-start border-b-[3px] border-slate-900 pb-10">
         <div className="flex flex-col">
           <div className="flex items-center gap-4 mb-4">
-            <img
-              src={logoUrl}
-              alt="Company Logo"
-              className="h-20 w-auto object-contain"
-            />
-            <div className="h-12 w-[1px] bg-slate-200 hidden md:block"></div>
+            <div className="bg-white p-1 rounded-lg border border-slate-100 shadow-sm">
+               <img 
+                 src="https://notugnacjjfaqatzzzgi.supabase.co/storage/v1/object/public/logo/Generated_Image_October_24__2025_-_10_58AM-removebg-preview.png" 
+                 alt="CS Tech Solutions Logo" 
+                 className="w-12 h-12 object-contain"
+               />
+            </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tighter text-slate-900 leading-none">INFRASTRUX</h1>
-              <p className="text-[10px] text-blue-600 font-bold uppercase tracking-[0.3em] mt-1">Systems Architecture</p>
+              <h1 className="text-2xl font-black tracking-tighter text-slate-900 leading-none">CS TECH SOLUTIONS</h1>
+              <p className="text-[9px] text-blue-600 uppercase font-bold tracking-tight mt-1">Custom Web Development & Managed Hosting South Africa</p>
             </div>
           </div>
-          <div className="space-y-0.5">
-            <p className="text-[9px] text-slate-400 font-medium uppercase tracking-widest">Global Engineering Headquarters</p>
-            <p className="text-[9px] text-slate-400 font-medium uppercase tracking-widest">Technical Division | Series 09-X</p>
+          <div className="mt-4">
+             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Global Operations Hub</p>
+             <p className="text-[10px] text-slate-500 font-medium">Cape Town • Johannesburg • Durban</p>
           </div>
         </div>
-
-        <div className="text-left md:text-right border-l-2 md:border-l-0 md:border-r-2 border-blue-600 pl-4 md:pl-0 md:pr-4">
-          <div className="text-[10px] font-black text-slate-400 uppercase mb-1 tracking-[0.2em]">Official Technical Release</div>
-          <h2 className="text-4xl font-serif italic text-slate-900 mb-1 leading-tight">{docType}</h2>
-          <div className="flex md:justify-end items-center gap-2">
-            <div className="w-8 h-[1px] bg-slate-200"></div>
-            <p className="text-xs font-bold text-slate-500 font-mono uppercase">{date}</p>
+        
+        <div className="text-right">
+          <div className="inline-block bg-slate-100 px-3 py-1 rounded-md text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">
+            Proprietary & Confidential
+          </div>
+          <h2 className="text-4xl font-serif italic text-slate-900 mb-1">{docType}</h2>
+          <div className="flex flex-col items-end mt-2">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Filing Date</p>
+            <p className="text-sm font-semibold text-slate-800 border-t border-slate-200 pt-1 px-2">{date}</p>
           </div>
         </div>
       </div>
-
-      <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8 text-sm bg-slate-50/50 p-6 rounded-2xl border border-slate-100/50 backdrop-blur-sm">
-        <div className="relative">
-          <div className="absolute -left-3 top-0 bottom-0 w-[2px] bg-slate-200"></div>
-          <p className="text-slate-400 font-bold uppercase text-[9px] tracking-[0.2em] mb-2">Project Specification</p>
-          <p className="text-slate-900 font-black text-xl leading-tight mb-1">{projectName || "Untitled Initiative"}</p>
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-[10px] bg-slate-900 text-white px-2 py-0.5 rounded font-bold uppercase">Client</span>
-            <p className="text-slate-700 font-medium truncate">{clientName || "Proprietary Organization"}</p>
-          </div>
+      
+      <div className="mt-10 grid grid-cols-3 gap-8 text-sm">
+        <div className="col-span-1">
+          <p className="text-slate-400 font-bold uppercase text-[9px] tracking-wider mb-2">Project Identity</p>
+          <p className="text-slate-900 font-black text-xl leading-tight">{projectName}</p>
         </div>
-        <div className="text-left md:text-right relative">
-          <div className="absolute -right-3 top-0 bottom-0 w-[2px] bg-slate-200 hidden md:block"></div>
-          <p className="text-slate-400 font-bold uppercase text-[9px] tracking-[0.2em] mb-2">Certification Lead</p>
-          <p className="text-slate-900 font-black text-xl leading-tight mb-1">{author || "Lead Architect"}</p>
-          <p className="text-slate-500 font-medium text-xs">Senior Systems Engineer • Division 04</p>
+        <div className="col-span-1 border-l border-slate-100 pl-8">
+          <p className="text-slate-400 font-bold uppercase text-[9px] tracking-wider mb-2">Client Entity</p>
+          <p className="text-slate-800 font-bold text-lg">{clientName}</p>
+        </div>
+        <div className="col-span-1 border-l border-slate-100 pl-8">
+          <p className="text-slate-400 font-bold uppercase text-[9px] tracking-wider mb-2">Project Principal</p>
+          <p className="text-slate-800 font-bold">{author}</p>
+          <p className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mt-1">Technical Lead Engineer</p>
         </div>
       </div>
 
-      <div className="absolute -bottom-[3px] left-0 w-2/3 h-[3px] bg-blue-600"></div>
-      <div className="absolute -bottom-[3px] right-0 w-1/4 h-[3px] bg-slate-900"></div>
+      <div className="absolute bottom-[-1.5px] left-0 w-24 h-[3px] bg-blue-600"></div>
     </header>
   );
 };
